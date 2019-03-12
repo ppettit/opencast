@@ -21,16 +21,32 @@
 
 package org.opencastproject.lti;
 
+import org.opencastproject.kernel.security.OAuthConsumerDetailsService;
+
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+
+import net.oauth.OAuthAccessor;
+import net.oauth.OAuthConsumer;
+import net.oauth.OAuthMessage;
+
 import org.apache.commons.lang3.StringUtils;
-import org.json.simple.JSONObject;
+import org.imsglobal.lti.BasicLTIUtil;
+import org.osgi.service.cm.ManagedService;
+import org.osgi.service.component.ComponentContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.security.oauth.common.signature.SharedConsumerSecret;
+import org.springframework.security.oauth.provider.ConsumerDetails;
+import org.springframework.security.oauth.provider.ConsumerDetailsService;
 
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Arrays;
+import java.util.Dictionary;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.SortedSet;
 import java.util.TreeSet;
@@ -46,7 +62,7 @@ import javax.ws.rs.core.UriBuilder;
  * A servlet to accept an LTI login via POST. The actual authentication happens in LtiProcessingFilter. GET requests
  * produce JSON containing the LTI parameters passed during LTI launch.
  */
-public class LtiServlet extends HttpServlet {
+public class LtiServlet extends HttpServlet implements ManagedService {
 
   private static final String LTI_CUSTOM_PREFIX = "custom_";
   private static final String LTI_CUSTOM_TOOL = "custom_tool";
@@ -146,10 +162,22 @@ public class LtiServlet extends HttpServlet {
   public static final String CONSUMER_CONTACT = "tool_consumer_instance_contact_email";
 
   /** See the LTI specification */
+  public static final String CONSUMER_KEY = "oauth_consumer_key";
+
+  /** See the LTI specification */
   public static final String COURSE_OFFERING = "lis_course_offering_sourcedid";
 
   /** See the LTI specification */
   public static final String COURSE_SECTION = "lis_course_section_sourcedid";
+
+  /** See the LTI specification */
+  public static final String DATA = "data";
+
+  /** See the LTI specification */
+  public static final String CONTENT_ITEM_RETURN_URL = "content_item_return_url";
+
+  /** See the LTI specification */
+  public static final String ACCEPT_PRESENTATION_DOCUMENT_TARGETS = "accept_presentation_document_targets";
 
   public static final SortedSet<String> LTI_CONSTANTS;
 
@@ -181,9 +209,16 @@ public class LtiServlet extends HttpServlet {
     LTI_CONSTANTS.add(CONSUMER_DESCRIPTION);
     LTI_CONSTANTS.add(CONSUMER_URL);
     LTI_CONSTANTS.add(CONSUMER_CONTACT);
+    LTI_CONSTANTS.add(CONSUMER_KEY);
     LTI_CONSTANTS.add(COURSE_OFFERING);
     LTI_CONSTANTS.add(COURSE_SECTION);
+    LTI_CONSTANTS.add(DATA);
+    LTI_CONSTANTS.add(CONTENT_ITEM_RETURN_URL);
+    LTI_CONSTANTS.add(ACCEPT_PRESENTATION_DOCUMENT_TARGETS);
+
   }
+
+  private OAuthConsumerDetailsService consumerDetailsService;
 
   /**
    * {@inheritDoc}
@@ -195,6 +230,16 @@ public class LtiServlet extends HttpServlet {
   protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
     // Store the LTI data as a map in the session
     HttpSession session = req.getSession(false);
+
+    // Always set the session cookie
+    resp.setHeader("Set-Cookie", "JSESSIONID=" + session.getId() + ";Path=/");
+
+    // Send content item (deep linking) message back to LMS
+    if (req.getParameterMap().containsKey("returnContentItem") || "/lti/ci".equals(req.getRequestURI())) {
+      sendContentItem(req, resp);
+      return;
+    }
+
     session.setAttribute(SESSION_ATTRIBUTE_KEY, getLtiValuesAsMap(req));
 
     // We must return a 200 for some OAuth client libraries to accept this as a valid response
@@ -238,9 +283,6 @@ public class LtiServlet extends HttpServlet {
     // Build the final URL (as a string)
     String redirectUrl = builder.build().toString();
 
-    // Always set the session cookie
-    resp.setHeader("Set-Cookie", "JSESSIONID=" + session.getId() + ";Path=/");
-
     // The client can specify debug option by passing a value to test
     // if in test mode display details where we go
     if (Boolean.valueOf(StringUtils.trimToEmpty(req.getParameter(LTI_CUSTOM_TEST)))) {
@@ -252,6 +294,45 @@ public class LtiServlet extends HttpServlet {
       logger.debug(redirectUrl);
       resp.sendRedirect(redirectUrl);
     }
+  }
+
+  /**
+   * Sends a ContentItemSelection response back to the LMS
+   *
+   * @param resp
+   *          the HttpServletRequest
+   */
+  private void sendContentItem(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+    HttpSession session = req.getSession(false);
+    Map<String, String> sessProps = (Map<String, String>) session.getAttribute(SESSION_ATTRIBUTE_KEY);
+
+    String consumerKey = sessProps.get("oauth_consumer_key");
+    ConsumerDetails consumer = consumerDetailsService.loadConsumerByConsumerKey(consumerKey);
+    String consumerSecret = ((SharedConsumerSecret) consumer.getSignatureSecret()).getConsumerSecret();
+
+
+    // TODO: generate this properly
+    String contentItems = "{\"@context\": \"http://purl.imsglobal.org/ctx/lti/v1/ContentItem\","
+            + "\"@graph\":[{"
+            + "\"@type\": \"LtiLinkItem\","
+            + "\"mediaType\": \"application/vnd.ims.lti.v1.ltilink\","
+            + "\"title\": \"" + req.getParameter("title") + "\","
+            + "\"text\": \"" + req.getParameter("created") + "\","
+            + "\"custom\": {\"tool\": \"" + req.getParameter("player") + "\"},"
+            + "\"thumbnail\": {\"@id\": \"" + req.getParameter("image") + "\"}"
+            + "}]"
+            + "}";
+
+    Map<String, String> props = new HashMap<String, String>();
+    props.put("lti_message_type", "ContentItemSelection");
+    props.put("content_items", contentItems);
+    props.put("data", sessProps.get("data"));
+    Map<String, String> properties = signProperties(props, sessProps.get("content_item_return_url"),
+            "POST", consumerKey, consumerSecret);
+    resp.setContentType("text/html");
+
+    resp.setContentType("text/html");
+    resp.getWriter().write(BasicLTIUtil.postLaunchHTML(properties, sessProps.get("content_item_return_url"), true));
   }
 
   /**
@@ -291,7 +372,94 @@ public class LtiServlet extends HttpServlet {
         ltiAttributes = new HashMap<String, String>();
       }
       resp.setContentType("application/json");
-      JSONObject.writeJSONString(ltiAttributes, resp.getWriter());
+      Gson gson = new GsonBuilder().create();
+      resp.getWriter().write(gson.toJson(ltiAttributes));
     }
   }
+
+  /**
+   * Sets the consumer details service
+   *
+   * @param consumerDetailsService
+   *          the consumer details service to set
+   */
+  public void setConsumerDetailsService(ConsumerDetailsService consumerDetailsService) {
+    this.consumerDetailsService = (OAuthConsumerDetailsService) consumerDetailsService;
+  }
+
+  public void activate(ComponentContext cc) {
+    logger.info("LTI Serviet started.");
+  }
+
+  @Override
+  public void updated(Dictionary<String, ?> properties) {
+    logger.info("LTI Serviet updated.");
+  }
+
+  /**
+   * Signs the ContentItemSelection properties
+   *
+   * This is mostly copied from BasicLTIUtil as the normal signProperties
+   * does not have support for ContentItemSelection
+   *
+   * TODO: Sort this out properly!
+   */
+  public static Map<String, String> signProperties(
+          Map<String, String> postProp, String url, String method,
+          String oauthConsumerKey, String oauthConsumerSecret) {
+
+    postProp = BasicLTIUtil.cleanupProperties(postProp);
+    String items = postProp.remove("custom_content_items");
+    postProp.put("content_items", items);
+    String data = postProp.remove("custom_data");
+    postProp.put("data", data);
+
+    if (postProp.get(LTI_VERSION) == null) {
+      postProp.put(LTI_VERSION, "LTI-1p0");
+    }
+
+    if (postProp.get(BasicLTIUtil.BASICLTI_SUBMIT) == null) {
+      postProp.put(BasicLTIUtil.BASICLTI_SUBMIT, "Return content to Consumer");
+    }
+
+    if (postProp.get("oauth_callback") == null) {
+      postProp.put("oauth_callback", "about:blank");
+    }
+
+    if (oauthConsumerKey == null || oauthConsumerSecret == null) {
+      logger.error("No signature generated in signProperties");
+      return postProp;
+    }
+
+    OAuthMessage oam = new OAuthMessage(method, url, postProp.entrySet());
+    OAuthConsumer cons = new OAuthConsumer("about:blank", oauthConsumerKey,
+            oauthConsumerSecret, null);
+    OAuthAccessor acc = new OAuthAccessor(cons);
+    try {
+      oam.addRequiredParameters(acc);
+
+      List<Map.Entry<String, String>> params = oam.getParameters();
+
+      Map<String, String> nextProp = new HashMap<String, String>();
+
+      // Convert to Map<String, String>
+      for (final Map.Entry<String, String> entry : params) {
+        nextProp.put(entry.getKey(), entry.getValue());
+      }
+      return nextProp;
+    } catch (net.oauth.OAuthException e) {
+      logger.warn("BasicLTIUtil.signProperties OAuth Exception "
+              + e.getMessage());
+      throw new Error(e);
+    } catch (java.io.IOException e) {
+      logger.warn("BasicLTIUtil.signProperties IO Exception "
+              + e.getMessage());
+      throw new Error(e);
+    } catch (java.net.URISyntaxException e) {
+      logger.warn("BasicLTIUtil.signProperties URI Syntax Exception "
+              + e.getMessage());
+      throw new Error(e);
+    }
+  }
+
 }

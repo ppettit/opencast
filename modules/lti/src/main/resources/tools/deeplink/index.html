@@ -4,33 +4,44 @@
 <meta http-equiv=content-type content="text/html; charset=utf-8" />
 <meta name=author content="Opencast" />
 <meta name=viewport content="width=device-width, initial-scale=1">
-<link rel=stylesheet type=text/css href=series.css />
+<link rel=stylesheet type=text/css href=deeplink.css />
 <link rel=stylesheet href=/ltitools/lib/font-awesome/css/font-awesome.min.css />
 <link rel=stylesheet href=/ltitools/lib/paginationjs/dist/pagination.css />
 <script type=text/javascript src=/ltitools/lib/jquery/dist/jquery.min.js></script>
 <script type=text/javascript src=/ltitools/lib/mustache/mustache.min.js></script>
 <script type=text/javascript src=/ltitools/lib/paginationjs/dist/pagination.min.js></script>
 <script type=text/javascript src=/ltitools/i18n-data.js></script>
-<script type=text/javascript src=series.js></script>
+<script type=text/javascript src=deeplink.js></script>
 
-<title>Opencast: Series</title>
+<title>Opencast: Deep Linking</title>
 </head>
 <body>
 
 <header></header>
-<main></main>
+<main>
+  <form id=select method=post action=/lti/ci>
+    <div id=selections></div>
+    <input type=hidden name=title id=title>
+    <input type=hidden name=image id=image>
+    <input type=hidden name=created id=created>
+    <input type=submit value=Select />
+  </form>
+</main>
 <footer></footer>
 
 <!-- Template for episodes -->
 <script id=template-episode type=x-tmpl-mustache>
-  <a class=episode href={{player}}>
-    <div class=preview><img alt=Preview src={{image}} /></div>
-    <div class=desc>
-      <h2>{{title}}</h2>
-      {{i18ncreator}}<br />
-      {{created}}
-    </div>
-  </a>
+  <div class=episode>
+    <input type=radio name=player id={{mpID}} value={{player}} onclick="populateData('{{title}}', '{{image}}', '{{created}}')">
+    <label for={{mpID}}>
+      <div class=preview><img alt=Preview src={{image}} /></div>
+      <div class=desc>
+        <h2>{{title}}</h2>
+        {{i18ncreator}}<br />
+        {{created}}
+      </div>
+    </label>
+  </div>
 </script>
 
 <!-- Template for spinner -->
