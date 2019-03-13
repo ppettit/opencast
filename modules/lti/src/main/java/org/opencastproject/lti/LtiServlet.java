@@ -310,7 +310,6 @@ public class LtiServlet extends HttpServlet implements ManagedService {
     ConsumerDetails consumer = consumerDetailsService.loadConsumerByConsumerKey(consumerKey);
     String consumerSecret = ((SharedConsumerSecret) consumer.getSignatureSecret()).getConsumerSecret();
 
-
     // TODO: generate this properly
     String contentItems = "{\"@context\": \"http://purl.imsglobal.org/ctx/lti/v1/ContentItem\","
             + "\"@graph\":[{"
@@ -409,10 +408,15 @@ public class LtiServlet extends HttpServlet implements ManagedService {
           String oauthConsumerKey, String oauthConsumerSecret) {
 
     postProp = BasicLTIUtil.cleanupProperties(postProp);
-    String items = postProp.remove("custom_content_items");
-    postProp.put("content_items", items);
-    String data = postProp.remove("custom_data");
-    postProp.put("data", data);
+    if (postProp.containsKey("custom_content_items")) {
+      String items = postProp.remove("custom_content_items");
+      postProp.put("content_items", items);
+    }
+
+    if (postProp.containsKey("custom_data")) {
+      String data = postProp.remove("custom_data");
+      postProp.put("data", data);
+    }
 
     if (postProp.get(LTI_VERSION) == null) {
       postProp.put(LTI_VERSION, "LTI-1p0");
