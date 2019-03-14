@@ -43,6 +43,7 @@ import org.springframework.security.oauth.provider.ConsumerDetailsService;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.net.URLDecoder;
 import java.util.Arrays;
 import java.util.Dictionary;
 import java.util.HashMap;
@@ -66,7 +67,10 @@ public class LtiServlet extends HttpServlet implements ManagedService {
 
   private static final String LTI_CUSTOM_PREFIX = "custom_";
   private static final String LTI_CUSTOM_TOOL = "custom_tool";
+  private static final String LTI_CUSTOM_DL_TOOL = "custom_dl_tool";
   private static final String LTI_CUSTOM_TEST = "custom_test";
+  private static final String LTI_MESSAGE_TYPE_BASIC = "basic-lti-launch-request";
+  private static final String LTI_MESSAGE_TYPE_CI = "ContentItemSelectionRequest";
 
   /** The logger */
   private static final Logger logger = LoggerFactory.getLogger(LtiServlet.class);
@@ -247,7 +251,17 @@ public class LtiServlet extends HttpServlet implements ManagedService {
     // The URL of the LTI tool. If no specific tool is passed we use the test tool
     UriBuilder builder = null;
     try {
-      URI toolUri = new URI(StringUtils.trimToEmpty(req.getParameter(LTI_CUSTOM_TOOL)));
+      // If a content item request, use the dl_tool instead of tool so that we can
+      // return a custom tool param in the result later
+      String messageType = StringUtils.trimToEmpty(req.getParameter(LTI_MESSAGE_TYPE));
+      logger.debug("Received '{}' LTI message type", messageType);
+
+      URI toolUri;
+      if (messageType.equals(LTI_MESSAGE_TYPE_CI)) {
+        toolUri = new URI(URLDecoder.decode(StringUtils.trimToEmpty(req.getParameter(LTI_CUSTOM_DL_TOOL)), "UTF-8"));
+      } else {
+        toolUri = new URI(URLDecoder.decode(StringUtils.trimToEmpty(req.getParameter(LTI_CUSTOM_TOOL)), "UTF-8"));
+      }
 
       if (toolUri.getPath().isEmpty())
         throw new URISyntaxException(toolUri.toString(), "Provided 'custom_tool' has an empty path");
