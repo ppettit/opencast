@@ -71,6 +71,7 @@ public class LtiServlet extends HttpServlet implements ManagedService {
   private static final String LTI_CUSTOM_TEST = "custom_test";
   private static final String LTI_MESSAGE_TYPE_BASIC = "basic-lti-launch-request";
   private static final String LTI_MESSAGE_TYPE_CI = "ContentItemSelectionRequest";
+  private static final String CONSUMER_KEY = "consumer_key";
 
   /** The logger */
   private static final Logger logger = LoggerFactory.getLogger(LtiServlet.class);
@@ -166,7 +167,7 @@ public class LtiServlet extends HttpServlet implements ManagedService {
   public static final String CONSUMER_CONTACT = "tool_consumer_instance_contact_email";
 
   /** See the LTI specification */
-  public static final String CONSUMER_KEY = "oauth_consumer_key";
+  public static final String OAUTH_CONSUMER_KEY = "oauth_consumer_key";
 
   /** See the LTI specification */
   public static final String COURSE_OFFERING = "lis_course_offering_sourcedid";
@@ -213,7 +214,7 @@ public class LtiServlet extends HttpServlet implements ManagedService {
     LTI_CONSTANTS.add(CONSUMER_DESCRIPTION);
     LTI_CONSTANTS.add(CONSUMER_URL);
     LTI_CONSTANTS.add(CONSUMER_CONTACT);
-    LTI_CONSTANTS.add(CONSUMER_KEY);
+    LTI_CONSTANTS.add(OAUTH_CONSUMER_KEY);
     LTI_CONSTANTS.add(COURSE_OFFERING);
     LTI_CONSTANTS.add(COURSE_SECTION);
     LTI_CONSTANTS.add(DATA);
@@ -246,6 +247,8 @@ public class LtiServlet extends HttpServlet implements ManagedService {
 
     session.setAttribute(SESSION_ATTRIBUTE_KEY, getLtiValuesAsMap(req));
 
+    String messageType = StringUtils.trimToEmpty(req.getParameter(LTI_MESSAGE_TYPE));
+
     // We must return a 200 for some OAuth client libraries to accept this as a valid response
 
     // The URL of the LTI tool. If no specific tool is passed we use the test tool
@@ -253,7 +256,6 @@ public class LtiServlet extends HttpServlet implements ManagedService {
     try {
       // If a content item request, use the dl_tool instead of tool so that we can
       // return a custom tool param in the result later
-      String messageType = StringUtils.trimToEmpty(req.getParameter(LTI_MESSAGE_TYPE));
       logger.debug("Received '{}' LTI message type", messageType);
 
       URI toolUri;
@@ -285,13 +287,22 @@ public class LtiServlet extends HttpServlet implements ManagedService {
     // We need to add the custom params to the outgoing request
     for (String key : req.getParameterMap().keySet()) {
       logger.debug("Found query parameter '{}'", key);
-      if (key.startsWith(LTI_CUSTOM_PREFIX) && (!LTI_CUSTOM_TOOL.equals(key))) {
+      if (key.startsWith(LTI_CUSTOM_PREFIX) && (!LTI_CUSTOM_TOOL.equals(key)) && (!LTI_CUSTOM_DL_TOOL.equals(key))) {
         String paramValue = req.getParameter(key);
         // we need to remove the prefix custom_
         String paramName = key.substring(LTI_CUSTOM_PREFIX.length());
         logger.debug("Found custom var: {}:{}", paramName, paramValue);
         builder.queryParam(paramName, paramValue);
       }
+    }
+
+    // add params required for content item
+    if (messageType.equals(LTI_MESSAGE_TYPE_CI)) {
+      if (req.getParameterMap().containsKey(DATA)) {
+        builder.queryParam(DATA, req.getParameter(DATA));
+      }
+      builder.queryParam(CONSUMER_KEY, req.getParameter(OAUTH_CONSUMER_KEY));
+      builder.queryParam(CONTENT_ITEM_RETURN_URL, req.getParameter(CONTENT_ITEM_RETURN_URL));
     }
 
     // Build the final URL (as a string)
