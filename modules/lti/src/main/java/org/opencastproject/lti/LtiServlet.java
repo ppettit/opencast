@@ -71,6 +71,7 @@ public class LtiServlet extends HttpServlet implements ManagedService {
   private static final String LTI_CUSTOM_TEST = "custom_test";
   private static final String LTI_MESSAGE_TYPE_BASIC = "basic-lti-launch-request";
   private static final String LTI_MESSAGE_TYPE_CI = "ContentItemSelectionRequest";
+  private static final String LTI_MESSAGE_TYPE_CI_SELECTION = "ContentItemSelection";
   private static final String CONSUMER_KEY = "consumer_key";
 
   /** The logger */
@@ -324,39 +325,29 @@ public class LtiServlet extends HttpServlet implements ManagedService {
   /**
    * Sends a ContentItemSelection response back to the LMS
    *
-   * @param resp
+   * @param req
    *          the HttpServletRequest
+   * @param resp
+   *          the HttpServletResponse
    */
   private void sendContentItem(HttpServletRequest req, HttpServletResponse resp) throws IOException {
-    HttpSession session = req.getSession(false);
-    Map<String, String> sessProps = (Map<String, String>) session.getAttribute(SESSION_ATTRIBUTE_KEY);
-
-    String consumerKey = sessProps.get("oauth_consumer_key");
+    String consumerKey = req.getParameter(CONSUMER_KEY);
     ConsumerDetails consumer = consumerDetailsService.loadConsumerByConsumerKey(consumerKey);
     String consumerSecret = ((SharedConsumerSecret) consumer.getSignatureSecret()).getConsumerSecret();
 
-    // TODO: generate this properly
-    String contentItems = "{\"@context\": \"http://purl.imsglobal.org/ctx/lti/v1/ContentItem\","
-            + "\"@graph\":[{"
-            + "\"@type\": \"LtiLinkItem\","
-            + "\"mediaType\": \"application/vnd.ims.lti.v1.ltilink\","
-            + "\"title\": \"" + req.getParameter("title") + "\","
-            + "\"text\": \"" + req.getParameter("created") + "\","
-            + "\"custom\": {\"tool\": \"" + req.getParameter("player") + "\"},"
-            + "\"thumbnail\": {\"@id\": \"" + req.getParameter("image") + "\"}"
-            + "}]"
-            + "}";
+    String contentItems = req.getParameter("content_items");
+    String returnUrl = req.getParameter(CONTENT_ITEM_RETURN_URL);
 
     Map<String, String> props = new HashMap<String, String>();
-    props.put("lti_message_type", "ContentItemSelection");
+    props.put("lti_message_type", LTI_MESSAGE_TYPE_CI_SELECTION);
     props.put("content_items", contentItems);
-    props.put("data", sessProps.get("data"));
-    Map<String, String> properties = signProperties(props, sessProps.get("content_item_return_url"),
+    props.put("data", req.getParameter(DATA));
+    Map<String, String> properties = signProperties(props, returnUrl,
             "POST", consumerKey, consumerSecret);
     resp.setContentType("text/html");
 
     resp.setContentType("text/html");
-    resp.getWriter().write(BasicLTIUtil.postLaunchHTML(properties, sessProps.get("content_item_return_url"), true));
+    resp.getWriter().write(BasicLTIUtil.postLaunchHTML(properties, returnUrl, true));
   }
 
   /**

@@ -162,10 +162,32 @@ function loadPage(page) {
 }
 
 // eslint-disable-next-line
-function populateData(title, image, created) {
-  $('#title').val(title);
-  $('#image').val(image);
-  $('#created').val(created);
+function populateData(title, image, created, player) {
+  // pass required data back to the server
+  const urlParams = new URLSearchParams(window.location.search);
+  $('#content_item_return_url').val(urlParams.get('content_item_return_url'));
+  $('#consumer_key').val(urlParams.get('consumer_key'));
+  if (urlParams.has('data')) {
+    $('#data').val(urlParams.get('data'));
+  }
+
+  // generate content_items
+  var contentItems = {
+    '@context': 'http://purl.imsglobal.org/ctx/lti/v1/ContentItem',
+    '@graph': [{
+      '@type': 'LtiLinkItem',
+      mediaType: 'application/vnd.ims.lti.v1.ltilink',
+      title: title,
+      text: created,
+      thumbnail: {'@id': image},
+      custom: {
+        tool: player
+      }
+    }]
+  };
+
+  $('#content_items').val(JSON.stringify(contentItems).replace(/"/g, '"'));
+
 }
 
 $(document).ready(function() {
