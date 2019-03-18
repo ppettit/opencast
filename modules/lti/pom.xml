@@ -21,29 +21,9 @@
       <version>${project.version}</version>
     </dependency>
     <dependency>
-      <groupId>org.imsglobal</groupId>
-      <artifactId>basiclti-util</artifactId>
-      <version>1.1.2</version>
-    </dependency>
-    <dependency>
-      <groupId>net.oauth.core</groupId>
-      <artifactId>oauth</artifactId>
-      <version>20100527</version>
-    </dependency>
-    <dependency>
-      <groupId>net.oauth.core</groupId>
-      <artifactId>oauth-provider</artifactId>
-      <version>20100527</version>
-    </dependency>
-    <dependency>
-      <groupId>oauth.signpost</groupId>
-      <artifactId>signpost-core</artifactId>
-      <version>1.2.1.2</version>
-    </dependency>
-    <dependency>
-      <groupId>oauth.signpost</groupId>
-      <artifactId>signpost-commonshttp4</artifactId>
-      <version>1.2.1.2</version>
+      <groupId>org.tsugi</groupId>
+      <artifactId>tsugi-util</artifactId>
+      <version>0.2.1</version>
     </dependency>
     <dependency>
       <groupId>org.slf4j</groupId>
@@ -268,15 +248,9 @@
             <Bundle-SymbolicName>${project.artifactId}</Bundle-SymbolicName>
             <Build-Number>${buildNumber}</Build-Number>
             <Embed-Dependency>
-              basiclti-util;inline=true,
-              oauth;inline=true,
-              oauth-provider;inline=true,
-              signpost-commonshttp4;inline=true,
-              signpost-core;inline=true
+              tsugi-util;inline=true
             </Embed-Dependency>
             <Import-Package>
-              !org.aspectj.lang.*,
-              !org.codehaus.jackson.*,
               javax.ws.rs;version=2.0.1,
               javax.ws.rs.core;version=2.0.1,
               *

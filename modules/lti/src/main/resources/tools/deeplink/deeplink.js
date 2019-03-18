@@ -170,6 +170,9 @@ function populateData(title, image, created, player) {
   if (urlParams.has('data')) {
     $('#data').val(urlParams.get('data'));
   }
+  if (urlParams.has('test')) {
+    $('#test').val(urlParams.get('test'));
+  }
 
   // generate content_items
   var contentItems = {
