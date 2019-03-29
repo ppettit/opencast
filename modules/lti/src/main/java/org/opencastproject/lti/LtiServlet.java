@@ -62,12 +62,15 @@ import javax.ws.rs.core.UriBuilder;
 public class LtiServlet extends HttpServlet implements ManagedService {
 
   /** Our custom parameters **/
-  private static final String TOOL = "tool";
-  private static final String DL_TOOL = "dl_tool";
   private static final String TEST = "test";
+
+  private static final String CUSTOM_TOOL = BasicLTIConstants.CUSTOM_PREFIX + "tool";
+  private static final String CUSTOM_DL_TOOL = BasicLTIConstants.CUSTOM_PREFIX + "dl_tool";
+  private static final String CUSTOM_TEST = BasicLTIConstants.CUSTOM_PREFIX + TEST;
 
   /** needed to keep track of which secret to sign ContentItemSelection message **/
   private static final String CONSUMER_KEY = "consumer_key";
+  private static final String OAUTH_CONSUMER_KEY = BasicLTIConstants.OAUTH_PREFIX + CONSUMER_KEY;
 
   /** URI where tools should post to in order to generate ContentItemSelection message **/
   private static final String CONTENT_ITEMS_URI = "/lti/ci";
@@ -124,8 +127,7 @@ public class LtiServlet extends HttpServlet implements ManagedService {
     LTI_CONSTANTS.add(BasicLTIConstants.DATA);
     LTI_CONSTANTS.add(BasicLTIConstants.CONTENT_ITEM_RETURN_URL);
     LTI_CONSTANTS.add(BasicLTIConstants.ACCEPT_PRESENTATION_DOCUMENT_TARGETS);
-    LTI_CONSTANTS.add(BasicLTIConstants.CUSTOM_PREFIX + CONSUMER_KEY);
-
+    LTI_CONSTANTS.add(OAUTH_CONSUMER_KEY);
   }
 
   private OAuthConsumerDetailsService consumerDetailsService;
@@ -154,8 +156,6 @@ public class LtiServlet extends HttpServlet implements ManagedService {
 
     String messageType = StringUtils.trimToEmpty(req.getParameter(BasicLTIConstants.LTI_MESSAGE_TYPE));
 
-    // We must return a 200 for some OAuth client libraries to accept this as a valid response
-
     // The URL of the LTI tool. If no specific tool is passed we use the test tool
     UriBuilder builder = null;
     try {
@@ -166,10 +166,10 @@ public class LtiServlet extends HttpServlet implements ManagedService {
       URI toolUri;
       if (messageType.equals(BasicLTIConstants.LTI_MESSAGE_TYPE_CONTENTITEMSELECTIONREQUEST)) {
         toolUri = new URI(URLDecoder.decode(StringUtils.trimToEmpty(
-                req.getParameter(BasicLTIConstants.CUSTOM_PREFIX + DL_TOOL)), "UTF-8"));
+                req.getParameter(CUSTOM_TOOL)), "UTF-8"));
       } else {
         toolUri = new URI(URLDecoder.decode(StringUtils.trimToEmpty(
-                req.getParameter(BasicLTIConstants.CUSTOM_PREFIX + TOOL)), "UTF-8"));
+                req.getParameter(CUSTOM_TOOL)), "UTF-8"));
       }
 
       if (toolUri.getPath().isEmpty())
@@ -187,7 +187,7 @@ public class LtiServlet extends HttpServlet implements ManagedService {
       }
     } catch (URISyntaxException ex) {
       logger.warn("The 'custom_tool' parameter was invalid: '{}'. Reverting to default: '{}'",
-              Arrays.toString(req.getParameterValues(BasicLTIConstants.CUSTOM_PREFIX + TOOL)), TOOLS_URL);
+              Arrays.toString(req.getParameterValues(CUSTOM_TOOL)), TOOLS_URL);
       builder = UriBuilder.fromPath(TOOLS_URL);
     }
 
@@ -195,8 +195,8 @@ public class LtiServlet extends HttpServlet implements ManagedService {
     for (Object k : req.getParameterMap().keySet()) {
       String key = k.toString();
       logger.debug("Found query parameter '{}'", k);
-      if (key.startsWith(BasicLTIConstants.CUSTOM_PREFIX) && (!(BasicLTIConstants.CUSTOM_PREFIX + TOOL).equals(key))
-              && (!(BasicLTIConstants.CUSTOM_PREFIX + TOOL).equals(key))) {
+      if (key.startsWith(BasicLTIConstants.CUSTOM_PREFIX) && !CUSTOM_TOOL.equals(key)
+              && !CUSTOM_DL_TOOL.equals(key)) {
         String paramValue = req.getParameter(key);
         // we need to remove the prefix custom_
         String paramName = key.substring(BasicLTIConstants.CUSTOM_PREFIX.length());
@@ -219,7 +219,7 @@ public class LtiServlet extends HttpServlet implements ManagedService {
 
     // The client can specify debug option by passing a value to test
     // if in test mode display details where we go
-    if (Boolean.valueOf(StringUtils.trimToEmpty(req.getParameter(BasicLTIConstants.CUSTOM_PREFIX + TEST)))) {
+    if (Boolean.valueOf(StringUtils.trimToEmpty(req.getParameter(CUSTOM_TEST)))) {
       resp.setContentType("text/html");
       resp.getWriter().write("<html><body>Welcome to Opencast LTI; you are going to " + redirectUrl + "<br>");
       resp.getWriter().write("<a href=\"" + redirectUrl + "\">continue...</a></body></html>");
@@ -321,7 +321,7 @@ public class LtiServlet extends HttpServlet implements ManagedService {
 
   @Override
   public void updated(Dictionary<String, ?> properties) {
-    logger.info("LTI Serviet updated.");
+    logger.info("LTI Servlet updated.");
   }
 
 }
